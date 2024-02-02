@@ -38,7 +38,7 @@ impl Scanner<'_> {
         self.tokens.push(Token {
             token_type: TokenType::Eof,
             lexeme: "".to_string(),
-            literal: "".to_string(),
+            literal: Literal::None,
             line: self.line,
         });
         self.tokens.clone()
@@ -51,42 +51,42 @@ impl Scanner<'_> {
     fn scan_token(&mut self) {
         let c = self.advance();
         match c {
-            '(' => self.add_token(TokenType::LeftParen, "".to_string()),
-            ')' => self.add_token(TokenType::RightParen, "".to_string()),
-            '{' => self.add_token(TokenType::LeftBrace, "".to_string()),
-            '}' => self.add_token(TokenType::RightBrace, "".to_string()),
-            ',' => self.add_token(TokenType::Comma, "".to_string()),
-            '.' => self.add_token(TokenType::Dot, "".to_string()),
-            '-' => self.add_token(TokenType::Minus, "".to_string()),
-            '+' => self.add_token(TokenType::Plus, "".to_string()),
-            ';' => self.add_token(TokenType::Semicolon, "".to_string()),
-            '*' => self.add_token(TokenType::Star, "".to_string()),
+            '(' => self.add_token(TokenType::LeftParen, Literal::None),
+            ')' => self.add_token(TokenType::RightParen, Literal::None),
+            '{' => self.add_token(TokenType::LeftBrace, Literal::None),
+            '}' => self.add_token(TokenType::RightBrace, Literal::None),
+            ',' => self.add_token(TokenType::Comma, Literal::None),
+            '.' => self.add_token(TokenType::Dot, Literal::None),
+            '-' => self.add_token(TokenType::Minus, Literal::None),
+            '+' => self.add_token(TokenType::Plus, Literal::None),
+            ';' => self.add_token(TokenType::Semicolon, Literal::None),
+            '*' => self.add_token(TokenType::Star, Literal::None),
             '!' => {
                 if self.match_token('=') {
-                    self.add_token(TokenType::BangEqual, "".to_string());
+                    self.add_token(TokenType::BangEqual, Literal::None);
                 } else {
-                    self.add_token(TokenType::Bang, "".to_string())
+                    self.add_token(TokenType::Bang, Literal::None)
                 }
             }
             '=' => {
                 if self.match_token('=') {
-                    self.add_token(TokenType::EqualEqual, "".to_string());
+                    self.add_token(TokenType::EqualEqual, Literal::None);
                 } else {
-                    self.add_token(TokenType::Equal, "".to_string())
+                    self.add_token(TokenType::Equal, Literal::None)
                 }
             }
             '<' => {
                 if self.match_token('=') {
-                    self.add_token(TokenType::LessEqual, "".to_string());
+                    self.add_token(TokenType::LessEqual, Literal::None);
                 } else {
-                    self.add_token(TokenType::Less, "".to_string())
+                    self.add_token(TokenType::Less, Literal::None)
                 }
             }
             '>' => {
                 if self.match_token('=') {
-                    self.add_token(TokenType::GreaterEqual, "".to_string());
+                    self.add_token(TokenType::GreaterEqual, Literal::None);
                 } else {
-                    self.add_token(TokenType::Greater, "".to_string())
+                    self.add_token(TokenType::Greater, Literal::None)
                 }
             }
             '/' => {
@@ -95,7 +95,7 @@ impl Scanner<'_> {
                         self.advance();
                     }
                 } else {
-                    self.add_token(TokenType::Slash, "".to_string())
+                    self.add_token(TokenType::Slash, Literal::None)
                 }
             }
             ' ' => (),
@@ -167,7 +167,7 @@ impl Scanner<'_> {
         }
 
         let value = self.source[self.start + 1..self.current - 1].to_string();
-        self.add_token(TokenType::String, value);
+        self.add_token(TokenType::String, Literal::String(value));
     }
 
     fn is_digit(&self, c: char) -> bool {
@@ -175,11 +175,13 @@ impl Scanner<'_> {
     }
 
     fn number(&mut self) {
+        let mut float_num = false;
         while self.is_digit(self.peek()) {
             self.advance();
         }
 
         if self.peek() == '.' && self.is_digit(self.peek_next()) {
+            float_num = true;
             self.advance();
 
             while self.is_digit(self.peek()) {
@@ -188,7 +190,18 @@ impl Scanner<'_> {
         }
 
         let value = self.source[self.start..self.current].to_string();
-        self.add_token(TokenType::Number, value);
+
+        if float_num {
+            self.add_token(
+                TokenType::Number,
+                Literal::Float(value.trim().parse::<f32>().unwrap()),
+            );
+        } else {
+            self.add_token(
+                TokenType::Number,
+                Literal::Integer(value.trim().parse::<i32>().unwrap()),
+            );
+        }
     }
 
     fn is_alpha(&self, c: char) -> bool {
@@ -207,12 +220,12 @@ impl Scanner<'_> {
         let text = self.source[self.start..self.current].to_string();
 
         match self.keywords.get(text.as_str()) {
-            Some(t) => self.add_token(t.clone(), text),
-            None => self.add_token(TokenType::Identifier, "".to_string()),
+            Some(t) => self.add_token(t.clone(), Literal::None),
+            None => self.add_token(TokenType::Identifier, Literal::String(text)),
         }
     }
 
-    fn add_token(&mut self, token_type: TokenType, literal: String) {
+    fn add_token(&mut self, token_type: TokenType, literal: Literal) {
         let text = self.source[self.start..self.current].to_string();
         self.tokens.push(Token {
             token_type,
@@ -224,10 +237,18 @@ impl Scanner<'_> {
 }
 
 #[derive(Debug, Clone)]
+enum Literal {
+    Integer(i32),
+    Float(f32),
+    String(String),
+    None,
+}
+
+#[derive(Debug, Clone)]
 struct Token {
     token_type: TokenType,
     lexeme: String,
-    literal: String, // Object?
+    literal: Literal, // Object?
     line: usize,
 }
 
@@ -322,7 +343,7 @@ fn read_file(path: String) -> Result<(), Box<dyn Error>> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let res = read_file(String::from("lox.txt"));
+    let res = read_file(String::from("lox_sample/lox.txt"));
 
     res
 }
